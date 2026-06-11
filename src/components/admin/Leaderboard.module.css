@@ -98,6 +98,23 @@
   background: var(--error-glow);
 }
 
+.fetchError {
+  background: var(--error-glow);
+  border: 1px solid var(--error);
+  border-radius: var(--radius);
+  padding: 1.25rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  color: #fca5a5;
+  font-size: 0.875rem;
+}
+
+.fetchError strong {
+  color: var(--error);
+  font-size: 1rem;
+}
+
 .notice {
   background: rgba(59, 130, 246, 0.1);
   border: 1px solid rgba(59, 130, 246, 0.25);

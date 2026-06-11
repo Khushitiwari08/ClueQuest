@@ -30,17 +30,29 @@ export default function Leaderboard() {
   const [entries, setEntries] = useState<LeaderboardEntry[]>([])
   const [isPublished, setIsPublished] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [fetchError, setFetchError] = useState<string | null>(null)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [resetting, setResetting] = useState(false)
 
   const fetchLeaderboard = useCallback(async () => {
     try {
       const res = await fetch('/api/admin/leaderboard')
-      if (!res.ok) return
+      if (res.status === 401) {
+        setFetchError('Session expired — please sign out and back in.')
+        return
+      }
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        setFetchError(`API error ${res.status}: ${body.error ?? 'unknown'}`)
+        return
+      }
       const data = await res.json()
+      setFetchError(null)
       setEntries(data.leaderboard)
       setIsPublished(data.isPublished)
       setLastUpdated(new Date())
+    } catch (err) {
+      setFetchError(`Network error: ${err instanceof Error ? err.message : String(err)}`)
     } finally {
       setLoading(false)
     }
@@ -81,6 +93,18 @@ export default function Leaderboard() {
       <div className={styles.loading}>
         <span className={styles.spinner} />
         <span>Loading leaderboard…</span>
+      </div>
+    )
+  }
+
+  if (fetchError) {
+    return (
+      <div className={styles.container}>
+        <div className={styles.fetchError}>
+          <strong>⚠ Could not load leaderboard</strong>
+          <p>{fetchError}</p>
+          <button onClick={fetchLeaderboard} className={styles.refreshBtn}>Try again</button>
+        </div>
       </div>
     )
   }
