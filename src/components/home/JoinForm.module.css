@@ -1,0 +1,310 @@
+.page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem 1rem;
+  position: relative;
+}
+
+.main {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 440px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2rem;
+  animation: fadeUp 0.6s ease both;
+}
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Logo */
+.logo {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.logoIconWrap {
+  position: relative;
+  display: inline-block;
+  margin-bottom: 0.25rem;
+}
+
+.logoIcon {
+  font-size: 4rem;
+  display: block;
+  filter: drop-shadow(0 0 24px rgba(245,158,11,0.6));
+  animation: iconBob 3s ease-in-out infinite;
+}
+
+@keyframes iconBob {
+  0%,100% { transform: translateY(0) rotate(-3deg); }
+  50%      { transform: translateY(-8px) rotate(3deg); }
+}
+
+.logoGlow {
+  position: absolute;
+  inset: -20px;
+  background: radial-gradient(circle, rgba(245,158,11,0.2) 0%, transparent 70%);
+  border-radius: 50%;
+  animation: glowPulse 3s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes glowPulse {
+  0%,100% { opacity: 0.5; transform: scale(1); }
+  50%      { opacity: 1; transform: scale(1.15); }
+}
+
+.logoText {
+  font-size: 2.75rem;
+  font-weight: 900;
+  background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 50%, #f97316 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+
+.tagline {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  letter-spacing: 0.02em;
+}
+
+/* Card */
+.card {
+  width: 100%;
+  background: rgba(20, 20, 31, 0.8);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 20px;
+  padding: 2rem;
+  box-shadow:
+    0 0 0 1px rgba(245,158,11,0.06),
+    0 20px 60px rgba(0,0,0,0.5),
+    0 0 80px rgba(245,158,11,0.04);
+  animation: cardIn 0.6s 0.1s ease both;
+}
+
+@keyframes cardIn {
+  from { opacity: 0; transform: translateY(16px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.backBtn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  padding: 0;
+  margin-bottom: 1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  transition: color 0.2s;
+}
+
+.backBtn:hover { color: var(--text); }
+
+.cardHeader {
+  margin-bottom: 1.5rem;
+}
+
+.adminIcon {
+  font-size: 2rem;
+  display: block;
+  margin-bottom: 0.5rem;
+}
+
+.cardTitle {
+  font-size: 1.2rem;
+  font-weight: 700;
+  margin-bottom: 0.3rem;
+}
+
+.cardDesc {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+/* Form */
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.inputWrap {
+  position: relative;
+}
+
+.input {
+  width: 100%;
+  padding: 0.9rem 1.1rem;
+  background: rgba(255,255,255,0.04);
+  border: 1.5px solid rgba(255,255,255,0.1);
+  border-radius: 12px;
+  color: var(--text);
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+}
+
+.input:focus {
+  border-color: var(--primary);
+  background: rgba(245,158,11,0.05);
+  box-shadow: 0 0 0 3px rgba(245,158,11,0.12);
+}
+
+.input::placeholder {
+  color: var(--text-faint);
+  font-weight: 400;
+  letter-spacing: normal;
+}
+
+.error {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.82rem;
+  color: var(--error);
+  padding: 0.5rem 0.75rem;
+  background: rgba(239,68,68,0.08);
+  border-radius: 8px;
+  border: 1px solid rgba(239,68,68,0.2);
+}
+
+.btn {
+  width: 100%;
+  padding: 0.9rem 1rem;
+  background: linear-gradient(135deg, #f59e0b, #f97316);
+  color: #000;
+  border: none;
+  border-radius: 12px;
+  font-size: 1rem;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 50px;
+  cursor: pointer;
+  transition: opacity 0.2s, transform 0.15s, box-shadow 0.2s;
+  box-shadow: 0 4px 20px rgba(245,158,11,0.35);
+  position: relative;
+  overflow: hidden;
+}
+
+.btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255,255,255,0.15), transparent);
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.btn:hover:not(:disabled)::before { opacity: 1; }
+
+.btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 28px rgba(245,158,11,0.45);
+}
+
+.btn:active:not(:disabled) {
+  transform: translateY(0) scale(0.98);
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.btnArrow {
+  font-size: 1.1rem;
+  transition: transform 0.2s;
+}
+
+.btn:hover:not(:disabled) .btnArrow {
+  transform: translateX(3px);
+}
+
+.spinner {
+  width: 20px;
+  height: 20px;
+  border: 2.5px solid rgba(0,0,0,0.25);
+  border-top-color: #000;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  display: inline-block;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Team chips */
+.teams {
+  margin-top: 1.25rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+
+.teamsTitle {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-faint);
+  margin-bottom: 0.75rem;
+}
+
+.teamChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.chip {
+  padding: 0.3rem 0.7rem;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 99px;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+}
+
+.chip:hover {
+  background: rgba(245,158,11,0.1);
+  border-color: rgba(245,158,11,0.3);
+  color: var(--primary);
+}
+
+.hint {
+  font-size: 0.75rem;
+  color: var(--text-faint);
+  letter-spacing: 0.05em;
+}
+
+@media (max-width: 480px) {
+  .card { padding: 1.5rem; }
+  .logoText { font-size: 2.25rem; }
+}
