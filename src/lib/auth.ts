@@ -5,7 +5,7 @@ const COOKIE_NAME = 'cq_admin'
 
 function getSecret(): Uint8Array {
   const pw = process.env.ADMIN_PASSWORD
-  if (!pw) throw new Error('ADMIN_PASSWORD not set')
+  if (!pw) throw new Error('ADMIN_PASSWORD env var is not set')
   return new TextEncoder().encode(pw + '_cq_jwt_salt_v1')
 }
 
@@ -27,10 +27,14 @@ export async function verifyAdminToken(token: string): Promise<boolean> {
 }
 
 export async function getAdminSession(): Promise<boolean> {
-  const cookieStore = await cookies()
-  const token = cookieStore.get(COOKIE_NAME)?.value
-  if (!token) return false
-  return verifyAdminToken(token)
+  try {
+    const cookieStore = await cookies()
+    const token = cookieStore.get(COOKIE_NAME)?.value
+    if (!token) return false
+    return verifyAdminToken(token)
+  } catch {
+    return false
+  }
 }
 
 export { COOKIE_NAME }
