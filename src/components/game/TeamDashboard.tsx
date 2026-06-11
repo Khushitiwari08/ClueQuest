@@ -8,23 +8,12 @@ import styles from './TeamDashboard.module.css'
 
 type Link = { id: string; url: string; buttonText: string; order: number }
 type ChallengeData = {
-  id: string
-  title: string
-  question: string
-  imageData: string | null
-  isFinal: boolean
-  icon: string
-  answerLength: number
-  links: Link[]
+  id: string; title: string; question: string; imageData: string | null
+  isFinal: boolean; icon: string; answerLength: number; links: Link[]
 }
 type Assignment = {
-  id: string
-  position: number
-  isUnlocked: boolean
-  isCompleted: boolean
-  completedAt: string | null
-  pointsEarned: number | null
-  challenge: ChallengeData
+  id: string; position: number; isUnlocked: boolean; isCompleted: boolean
+  completedAt: string | null; pointsEarned: number | null; challenge: ChallengeData
 }
 type TeamState = {
   team: { code: string; totalPoints: number; startedAt: string | null; finishedAt: string | null }
@@ -49,6 +38,42 @@ export default function TeamDashboard({ teamCode }: { teamCode: string }) {
     setLoading(false)
   }, [teamCode])
 
+  // Optimistic update — no round trip needed after a correct answer
+  const handleSolved = useCallback((assignmentId: string, points: number, nextUnlocked: boolean) => {
+    setState((prev) => {
+      if (!prev) return prev
+      const now = new Date().toISOString()
+      const challenges = prev.challenges.map((a) => {
+        if (a.id === assignmentId) {
+          return { ...a, isCompleted: true, completedAt: now, pointsEarned: points }
+        }
+        // find next by position
+        const solvedPos = prev.challenges.find((x) => x.id === assignmentId)?.position ?? -1
+        if (nextUnlocked && a.position === solvedPos + 1) {
+          return { ...a, isUnlocked: true }
+        }
+        return a
+      })
+      const newTotal = prev.team.totalPoints + points
+      const allDone = challenges.every((a) => a.isCompleted)
+      return {
+        ...prev,
+        team: { ...prev.team, totalPoints: newTotal, finishedAt: allDone ? now : prev.team.finishedAt },
+        challenges,
+      }
+    })
+    // Move to next challenge immediately
+    if (nextUnlocked) {
+      setState((prev) => {
+        if (!prev) return prev
+        const solvedPos = prev.challenges.find((a) => a.id === assignmentId)?.position ?? -1
+        const next = prev.challenges.find((a) => a.position === solvedPos + 1)
+        if (next) setActivePosition(next.position)
+        return prev
+      })
+    }
+  }, [])
+
   useEffect(() => {
     let ignore = false
 
@@ -65,6 +90,7 @@ export default function TeamDashboard({ teamCode }: { teamCode: string }) {
 
     gameChannel.subscribe('game:published', () => { if (!ignore) fetchState() })
     gameChannel.subscribe('game:reset', () => { if (!ignore) fetchState() })
+    // Ably event is backup sync only — optimistic update already handled by handleSolved
     teamChannel.subscribe('challenge:completed', () => { if (!ignore) fetchState() })
 
     return () => {
@@ -116,7 +142,7 @@ export default function TeamDashboard({ teamCode }: { teamCode: string }) {
 
   const THEME_COLORS = ['#f59e0b','#8b5cf6','#06b6d4','#ec4899','#10b981']
   const activeChallenge = state.challenges.find((a) => a.isUnlocked && !a.isCompleted)
-  const accentColor = THEME_COLORS[(( activeChallenge?.position ?? 1) - 1) % THEME_COLORS.length]
+  const accentColor = THEME_COLORS[((activeChallenge?.position ?? 1) - 1) % THEME_COLORS.length]
 
   return (
     <div className={styles.layout}>
@@ -167,7 +193,7 @@ export default function TeamDashboard({ teamCode }: { teamCode: string }) {
                 p === assignment.position ? null : assignment.position
               )
             }
-            onSolved={fetchState}
+            onSolved={(result) => handleSolved(assignment.id, result.points, result.nextUnlocked)}
           />
         ))}
       </main>

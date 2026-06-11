@@ -104,8 +104,8 @@ export default function AdminPanel() {
       </div>
 
       <main className={styles.content}>
-        {tab === 'leaderboard' && <Leaderboard />}
-        {tab === 'challenges' && <ChallengeCreator />}
+        <div style={{ display: tab === 'leaderboard' ? 'block' : 'none' }}><Leaderboard /></div>
+        <div style={{ display: tab === 'challenges' ? 'block' : 'none' }}><ChallengeCreator /></div>
       </main>
     </div>
   )

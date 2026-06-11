@@ -22,9 +22,10 @@ type Assignment = {
   completedAt: string | null; pointsEarned: number | null; challenge: ChallengeData
 }
 type Status = 'idle' | 'wrong' | 'correct'
+type SolveResult = { points: number; rank: number; nextUnlocked: boolean }
 type Props = {
   assignment: Assignment; teamCode: string; isActive: boolean
-  onToggle: () => void; onSolved: () => void
+  onToggle: () => void; onSolved: (result: SolveResult) => void
 }
 
 export default function ChallengeCard({ assignment, teamCode, isActive, onToggle, onSolved }: Props) {
@@ -56,7 +57,7 @@ export default function ChallengeCard({ assignment, teamCode, isActive, onToggle
       setStatus('correct')
       setPoints(data.points)
       setRank(data.rank)
-      setTimeout(() => onSolved(), 900)
+      setTimeout(() => onSolved({ points: data.points, rank: data.rank, nextUnlocked: data.nextUnlocked }), 900)
     } else {
       setStatus('wrong')
       setTimeout(() => setStatus('idle'), 1200)
@@ -144,7 +145,6 @@ export default function ChallengeCard({ assignment, teamCode, isActive, onToggle
       {isActive && (
         <div className={styles.body} style={{ borderTopColor: theme.border }}>
 
-          {/* Coloured top accent bar */}
           <div className={styles.accentBar} style={{ background: `linear-gradient(90deg, ${theme.color}, transparent)` }} />
 
           {challenge.imageData && (
@@ -166,11 +166,7 @@ export default function ChallengeCard({ assignment, teamCode, isActive, onToggle
                     target="_blank"
                     rel="noopener noreferrer"
                     className={styles.linkBtn}
-                    style={{
-                      background: theme.bg,
-                      borderColor: theme.border,
-                      color: theme.color,
-                    }}
+                    style={{ background: theme.bg, borderColor: theme.border, color: theme.color }}
                   >
                     <span>{l.buttonText}</span>
                     <span className={styles.extIcon}>↗</span>
