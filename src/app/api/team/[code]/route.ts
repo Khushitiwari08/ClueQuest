@@ -7,14 +7,15 @@ export async function GET(
 ) {
   const { code } = await params
 
-  const team = await prisma.team.findFirst({
-    where: { code: { equals: code, mode: 'insensitive' } },
-  })
+  // Fetch team, gameState, and assignments in parallel
+  const [team, gameState] = await Promise.all([
+    prisma.team.findFirst({
+      where: { code: { equals: code, mode: 'insensitive' } },
+    }),
+    prisma.gameState.findUnique({ where: { id: 'game' } }),
+  ])
+
   if (!team) return NextResponse.json({ error: 'Team not found' }, { status: 404 })
-
-  const gameState = await prisma.gameState.findUnique({ where: { id: 'game' } })
-
-  const teamCode = team.code
 
   const assignments = await prisma.challengeAssignment.findMany({
     where: { teamId: team.id },
@@ -28,7 +29,7 @@ export async function GET(
 
   return NextResponse.json({
     team: {
-      code: teamCode,
+      code: team.code,
       totalPoints: team.totalPoints,
       startedAt: team.startedAt?.toISOString() ?? null,
       finishedAt: team.finishedAt?.toISOString() ?? null,

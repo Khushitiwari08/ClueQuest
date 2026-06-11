@@ -8,33 +8,30 @@ export async function POST(
   { params }: { params: Promise<{ code: string }> }
 ) {
   const { code } = await params
-
   const { assignmentId, answer } = await req.json()
 
   if (!assignmentId || !answer) {
     return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
   }
 
-  const team = await prisma.team.findFirst({
-    where: { code: { equals: code, mode: 'insensitive' } },
-  })
+  // Fetch team and assignment in parallel
+  const [team, assignment] = await Promise.all([
+    prisma.team.findFirst({
+      where: { code: { equals: code, mode: 'insensitive' } },
+    }),
+    prisma.challengeAssignment.findUnique({
+      where: { id: assignmentId },
+      include: { challenge: true },
+    }),
+  ])
+
   if (!team) return NextResponse.json({ error: 'Team not found' }, { status: 404 })
-
-  const upperCode = team.code
-
-  const assignment = await prisma.challengeAssignment.findUnique({
-    where: { id: assignmentId },
-    include: { challenge: true },
-  })
-
   if (!assignment || assignment.teamId !== team.id) {
     return NextResponse.json({ error: 'Assignment not found' }, { status: 404 })
   }
-
   if (!assignment.isUnlocked) {
     return NextResponse.json({ error: 'Challenge is locked' }, { status: 403 })
   }
-
   if (assignment.isCompleted) {
     return NextResponse.json({ correct: true, alreadyCompleted: true })
   }
@@ -42,7 +39,8 @@ export async function POST(
   const normalize = (s: string) => s.trim().toLowerCase().replace(/\s/g, '')
   const isCorrect = normalize(answer) === normalize(assignment.challenge.answer)
 
-  await prisma.submission.create({
+  // Record submission (fire and don't await — we don't need the result)
+  const submissionPromise = prisma.submission.create({
     data: {
       teamId: team.id,
       challengeId: assignment.challengeId,
@@ -52,58 +50,71 @@ export async function POST(
   })
 
   if (!isCorrect) {
+    submissionPromise.catch(() => {}) // best-effort
     return NextResponse.json({ correct: false })
   }
 
-  // Atomic rank determination
-  const rank = await redis.incr(challengeSolveKey(assignment.challengeId))
-  const points = pointsForRank(rank)
+  await submissionPromise
+
+  // Atomic rank + mark completed + add points — all in parallel
   const now = new Date()
+  const [rank] = await Promise.all([
+    redis.incr(challengeSolveKey(assignment.challengeId)),
+    prisma.challengeAssignment.update({
+      where: { id: assignment.id },
+      data: { isCompleted: true, completedAt: now },
+    }),
+  ])
 
-  await prisma.challengeAssignment.update({
-    where: { id: assignment.id },
-    data: { isCompleted: true, completedAt: now, pointsEarned: points },
-  })
+  const points = pointsForRank(rank)
 
-  await prisma.team.update({
-    where: { id: team.id },
-    data: { totalPoints: { increment: points } },
-  })
-
-  // Unlock next challenge
-  const nextAssignment = await prisma.challengeAssignment.findUnique({
-    where: { teamId_position: { teamId: team.id, position: assignment.position + 1 } },
-  })
-
-  let nextUnlocked = false
-  if (nextAssignment) {
-    await prisma.challengeAssignment.update({
-      where: { id: nextAssignment.id },
-      data: { isUnlocked: true },
-    })
-    nextUnlocked = true
-  } else {
-    // All challenges done
-    await prisma.team.update({
+  // Update points + find next assignment in parallel
+  const [, nextAssignment] = await Promise.all([
+    prisma.team.update({
       where: { id: team.id },
-      data: { finishedAt: now },
-    })
-  }
+      data: { totalPoints: { increment: points } },
+    }),
+    prisma.challengeAssignment.findUnique({
+      where: { teamId_position: { teamId: team.id, position: assignment.position + 1 } },
+    }),
+  ])
 
-  const updatedTeam = await prisma.team.findUnique({ where: { id: team.id } })
+  // Update pointsEarned + unlock next (or mark finished) in parallel
+  const unlockOrFinish = nextAssignment
+    ? prisma.challengeAssignment.update({
+        where: { id: nextAssignment.id },
+        data: { isUnlocked: true },
+      })
+    : prisma.team.update({
+        where: { id: team.id },
+        data: { finishedAt: now },
+      })
 
-  await publishEvent(CHANNELS.team(upperCode), 'challenge:completed', {
-    assignmentId,
-    position: assignment.position,
-    points,
-    nextUnlocked,
-  })
+  const [updatedTeam] = await Promise.all([
+    prisma.team.findUnique({ where: { id: team.id } }),
+    prisma.challengeAssignment.update({
+      where: { id: assignment.id },
+      data: { pointsEarned: points },
+    }),
+    unlockOrFinish,
+  ])
 
-  await publishEvent(CHANNELS.leaderboard, 'leaderboard:update', {
-    code: upperCode,
-    totalPoints: updatedTeam?.totalPoints ?? 0,
-    completedPosition: assignment.position,
-  })
+  const nextUnlocked = !!nextAssignment
+
+  // Publish Ably events in parallel (non-blocking on response)
+  Promise.all([
+    publishEvent(CHANNELS.team(team.code), 'challenge:completed', {
+      assignmentId,
+      position: assignment.position,
+      points,
+      nextUnlocked,
+    }),
+    publishEvent(CHANNELS.leaderboard, 'leaderboard:update', {
+      code: team.code,
+      totalPoints: updatedTeam?.totalPoints ?? 0,
+      completedPosition: assignment.position,
+    }),
+  ]).catch(() => {})
 
   return NextResponse.json({ correct: true, points, rank, nextUnlocked })
 }
