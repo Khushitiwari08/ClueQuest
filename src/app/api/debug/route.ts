@@ -12,9 +12,13 @@ export async function GET() {
     UPSTASH_REDIS_REST_TOKEN: !!process.env.UPSTASH_REDIS_REST_TOKEN,
   }
 
-  // Show first 60 chars of DATABASE_URL (no password) to diagnose format issues
-  const rawUrl = process.env.DATABASE_URL ?? ''
-  const safeUrl = rawUrl.replace(/:([^@]+)@/, ':<hidden>@').slice(0, 80)
+  let dbUsername = 'parse-error'
+  let dbHost = 'parse-error'
+  try {
+    const parsed = new URL(process.env.DATABASE_URL ?? '')
+    dbUsername = parsed.username
+    dbHost = parsed.host
+  } catch { /* ignore */ }
 
   let dbStatus = 'ok'
   let dbError: string | null = null
@@ -25,5 +29,5 @@ export async function GET() {
     dbError = err instanceof Error ? err.message : String(err)
   }
 
-  return NextResponse.json({ env: envCheck, dbUrlPreview: safeUrl, db: { status: dbStatus, error: dbError } })
+  return NextResponse.json({ env: envCheck, dbUsername, dbHost, db: { status: dbStatus, error: dbError } })
 }
