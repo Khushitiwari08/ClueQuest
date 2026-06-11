@@ -14,7 +14,7 @@ export async function POST(
     return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
   }
 
-  // Fetch team and assignment in parallel
+  // Round trip 1: fetch team + assignment in parallel
   const [team, assignment] = await Promise.all([
     prisma.team.findFirst({
       where: { code: { equals: code, mode: 'insensitive' } },
@@ -39,80 +39,59 @@ export async function POST(
   const normalize = (s: string) => s.trim().toLowerCase().replace(/\s/g, '')
   const isCorrect = normalize(answer) === normalize(assignment.challenge.answer)
 
-  // Record submission (fire and don't await — we don't need the result)
-  const submissionPromise = prisma.submission.create({
-    data: {
-      teamId: team.id,
-      challengeId: assignment.challengeId,
-      answer: answer.trim(),
-      isCorrect,
-    },
-  })
-
   if (!isCorrect) {
-    submissionPromise.catch(() => {}) // best-effort
+    // Fire-and-forget — wrong answer recording doesn't block the response
+    prisma.submission.create({
+      data: { teamId: team.id, challengeId: assignment.challengeId, answer: answer.trim(), isCorrect: false },
+    }).catch(() => {})
     return NextResponse.json({ correct: false })
   }
 
-  await submissionPromise
-
-  // Atomic rank + mark completed + add points — all in parallel
-  const now = new Date()
-  const [rank] = await Promise.all([
+  // Round trip 2 (parallel): get rank from Redis + fetch next assignment + record submission
+  const nextPosition = assignment.position + 1
+  const [rank, nextAssignment] = await Promise.all([
     redis.incr(challengeSolveKey(assignment.challengeId)),
-    prisma.challengeAssignment.update({
-      where: { id: assignment.id },
-      data: { isCompleted: true, completedAt: now },
+    prisma.challengeAssignment.findUnique({
+      where: { teamId_position: { teamId: team.id, position: nextPosition } },
+    }),
+    prisma.submission.create({
+      data: { teamId: team.id, challengeId: assignment.challengeId, answer: answer.trim(), isCorrect: true },
     }),
   ])
 
   const points = pointsForRank(rank)
-
-  // Update points + find next assignment in parallel
-  const [, nextAssignment] = await Promise.all([
-    prisma.team.update({
-      where: { id: team.id },
-      data: { totalPoints: { increment: points } },
-    }),
-    prisma.challengeAssignment.findUnique({
-      where: { teamId_position: { teamId: team.id, position: assignment.position + 1 } },
-    }),
-  ])
-
-  // Update pointsEarned + unlock next (or mark finished) in parallel
-  const unlockOrFinish = nextAssignment
-    ? prisma.challengeAssignment.update({
-        where: { id: nextAssignment.id },
-        data: { isUnlocked: true },
-      })
-    : prisma.team.update({
-        where: { id: team.id },
-        data: { finishedAt: now },
-      })
-
-  const [updatedTeam] = await Promise.all([
-    prisma.team.findUnique({ where: { id: team.id } }),
-    prisma.challengeAssignment.update({
-      where: { id: assignment.id },
-      data: { pointsEarned: points },
-    }),
-    unlockOrFinish,
-  ])
-
+  const now = new Date()
   const nextUnlocked = !!nextAssignment
 
-  // Publish Ably events in parallel (non-blocking on response)
+  // Round trip 3 (parallel): all DB writes at once
+  await Promise.all([
+    prisma.challengeAssignment.update({
+      where: { id: assignment.id },
+      data: { isCompleted: true, completedAt: now, pointsEarned: points },
+    }),
+    prisma.team.update({
+      where: { id: team.id },
+      data: {
+        totalPoints: { increment: points },
+        ...(nextUnlocked ? {} : { finishedAt: now }),
+      },
+    }),
+    nextAssignment
+      ? prisma.challengeAssignment.update({
+          where: { id: nextAssignment.id },
+          data: { isUnlocked: true },
+        })
+      : Promise.resolve(),
+  ])
+
+  // Ably fire-and-forget — response returns without waiting
+  const newTotal = team.totalPoints + points
   Promise.all([
     publishEvent(CHANNELS.team(team.code), 'challenge:completed', {
-      assignmentId,
-      position: assignment.position,
-      points,
-      nextUnlocked,
+      assignmentId, position: assignment.position, points, nextUnlocked,
     }),
     publishEvent(CHANNELS.leaderboard, 'leaderboard:update', {
-      code: team.code,
-      totalPoints: updatedTeam?.totalPoints ?? 0,
-      completedPosition: assignment.position,
+      code: team.code, totalPoints: newTotal, completedPosition: assignment.position,
     }),
   ]).catch(() => {})
 

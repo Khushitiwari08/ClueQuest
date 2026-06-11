@@ -17,12 +17,16 @@ export async function POST() {
   const isAdmin = await getAdminSession()
   if (!isAdmin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const gameState = await prisma.gameState.findUnique({ where: { id: 'game' } })
+  const [gameState, allChallenges, teams] = await Promise.all([
+    prisma.gameState.findUnique({ where: { id: 'game' } }),
+    prisma.challenge.findMany(),
+    prisma.team.findMany(),
+  ])
+
   if (gameState?.isPublished) {
     return NextResponse.json({ error: 'Game already published' }, { status: 400 })
   }
 
-  const allChallenges = await prisma.challenge.findMany()
   const regular = allChallenges.filter((c) => !c.isFinal)
   const finals = allChallenges.filter((c) => c.isFinal)
 
@@ -37,20 +41,11 @@ export async function POST() {
   }
 
   const finalChallenge = finals[finals.length - 1]
-  const teams = await prisma.team.findMany()
 
-  // Reset Redis solve counters
-  for (const c of allChallenges) {
-    await redis.del(challengeSolveKey(c.id))
-  }
-
-  // Delete existing assignments
-  await prisma.challengeAssignment.deleteMany()
-
-  // Assign challenges to each team
-  for (const team of teams) {
+  // Build ALL assignments for all teams in memory first, then insert in one shot
+  const allAssignments = teams.flatMap((team) => {
     const picked = shuffle(regular).slice(0, 4)
-    const assignments = [
+    return [
       ...picked.map((c, i) => ({
         teamId: team.id,
         challengeId: c.id,
@@ -64,20 +59,32 @@ export async function POST() {
         isUnlocked: false,
       },
     ]
-    await prisma.challengeAssignment.createMany({ data: assignments })
-  }
+  })
 
   const now = new Date()
-  await prisma.gameState.update({
-    where: { id: 'game' },
-    data: { isPublished: true, publishedAt: now },
-  })
 
-  await prisma.team.updateMany({
-    data: { totalPoints: 0, startedAt: now, finishedAt: null },
-  })
+  // Flush Redis counters + wipe old assignments + write new state — all in parallel
+  await Promise.all([
+    // Redis: delete all solve counters in parallel
+    Promise.all(allChallenges.map((c) => redis.del(challengeSolveKey(c.id)))),
+    // DB: wipe old assignments
+    prisma.challengeAssignment.deleteMany(),
+  ])
 
-  await publishEvent(CHANNELS.gameEvents, 'game:published', { publishedAt: now.toISOString() })
+  // Insert all assignments + update game/team state in parallel
+  await Promise.all([
+    prisma.challengeAssignment.createMany({ data: allAssignments }),
+    prisma.gameState.update({
+      where: { id: 'game' },
+      data: { isPublished: true, publishedAt: now },
+    }),
+    prisma.team.updateMany({
+      data: { totalPoints: 0, startedAt: now, finishedAt: null },
+    }),
+  ])
+
+  // Fire Ably after DB is settled (non-blocking on response)
+  publishEvent(CHANNELS.gameEvents, 'game:published', { publishedAt: now.toISOString() }).catch(() => {})
 
   return NextResponse.json({ ok: true, teamsAssigned: teams.length })
 }
