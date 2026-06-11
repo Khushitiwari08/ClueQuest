@@ -1,15 +1,15 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import OtpInput from '@/components/ui/OtpInput'
 import styles from './ChallengeCard.module.css'
 
 const THEMES = [
-  { color: '#f59e0b', bg: 'rgba(245,158,11,0.1)',  border: 'rgba(245,158,11,0.3)',  glow: 'rgba(245,158,11,0.15)', name: 'amber'  },
-  { color: '#8b5cf6', bg: 'rgba(139,92,246,0.1)',  border: 'rgba(139,92,246,0.3)',  glow: 'rgba(139,92,246,0.15)', name: 'purple' },
-  { color: '#06b6d4', bg: 'rgba(6,182,212,0.1)',   border: 'rgba(6,182,212,0.3)',   glow: 'rgba(6,182,212,0.15)',  name: 'cyan'   },
-  { color: '#ec4899', bg: 'rgba(236,72,153,0.1)',  border: 'rgba(236,72,153,0.3)',  glow: 'rgba(236,72,153,0.15)', name: 'pink'   },
-  { color: '#10b981', bg: 'rgba(16,185,129,0.1)',  border: 'rgba(16,185,129,0.3)',  glow: 'rgba(16,185,129,0.15)', name: 'green'  },
+  { color: '#f59e0b', bg: 'rgba(245,158,11,0.1)',  border: 'rgba(245,158,11,0.3)',  glow: 'rgba(245,158,11,0.15)' },
+  { color: '#8b5cf6', bg: 'rgba(139,92,246,0.1)',  border: 'rgba(139,92,246,0.3)',  glow: 'rgba(139,92,246,0.15)' },
+  { color: '#06b6d4', bg: 'rgba(6,182,212,0.1)',   border: 'rgba(6,182,212,0.3)',   glow: 'rgba(6,182,212,0.15)'  },
+  { color: '#ec4899', bg: 'rgba(236,72,153,0.1)',  border: 'rgba(236,72,153,0.3)',  glow: 'rgba(236,72,153,0.15)' },
+  { color: '#10b981', bg: 'rgba(16,185,129,0.1)',  border: 'rgba(16,185,129,0.3)',  glow: 'rgba(16,185,129,0.15)' },
 ]
 
 type Link = { id: string; url: string; buttonText: string; order: number }
@@ -25,33 +25,22 @@ type Status = 'idle' | 'wrong' | 'correct'
 type SolveResult = { points: number; rank: number; nextUnlocked: boolean }
 type Props = {
   assignment: Assignment; teamCode: string; isActive: boolean
+  imageData: string | null
   onToggle: () => void; onSolved: (result: SolveResult) => void
 }
 
-export default function ChallengeCard({ assignment, teamCode, isActive, onToggle, onSolved }: Props) {
+export default function ChallengeCard({ assignment, teamCode, isActive, imageData, onToggle, onSolved }: Props) {
   const [boxes, setBoxes] = useState<string[]>([])
   const [submitting, setSubmitting] = useState(false)
   const [status, setStatus] = useState<Status>('idle')
   const [points, setPoints] = useState<number | null>(null)
   const [rank, setRank] = useState<number | null>(null)
-  const [imageData, setImageData] = useState<string | null>(null)
-  const [imageFetched, setImageFetched] = useState(false)
 
   const { challenge, isUnlocked, isCompleted, pointsEarned, position } = assignment
   const theme = THEMES[(position - 1) % THEMES.length]
   const icon = challenge.icon || '🔍'
   const answerLength = challenge.answerLength || 4
   const filled = boxes.filter(Boolean).length === answerLength
-
-  // Lazy-load image only when card is first expanded
-  useEffect(() => {
-    if (!isActive || imageFetched) return
-    setImageFetched(true)
-    fetch(`/api/team/${teamCode}/image/${challenge.id}`)
-      .then((r) => r.ok ? r.json() : null)
-      .then((d) => { if (d?.imageData) setImageData(d.imageData) })
-      .catch(() => {})
-  }, [isActive, imageFetched, teamCode, challenge.id])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -77,7 +66,6 @@ export default function ChallengeCard({ assignment, teamCode, isActive, onToggle
     setSubmitting(false)
   }
 
-  // Locked
   if (!isUnlocked) {
     return (
       <div className={styles.card} style={{ borderColor: 'rgba(255,255,255,0.05)' }}>
@@ -92,7 +80,6 @@ export default function ChallengeCard({ assignment, teamCode, isActive, onToggle
     )
   }
 
-  // Completed
   if (isCompleted) {
     return (
       <div className={styles.completedCard} style={{ borderColor: theme.border, background: theme.bg }}>
@@ -116,14 +103,10 @@ export default function ChallengeCard({ assignment, teamCode, isActive, onToggle
     )
   }
 
-  // Active / Unlocked
   return (
     <div
       className={`${styles.card} ${styles.activeCard} ${isActive ? styles.expanded : ''}`}
-      style={isActive
-        ? { borderColor: theme.border, boxShadow: `0 0 0 1px ${theme.glow}, 0 8px 32px rgba(0,0,0,0.35)` }
-        : undefined
-      }
+      style={isActive ? { borderColor: theme.border, boxShadow: `0 0 0 1px ${theme.glow}, 0 8px 32px rgba(0,0,0,0.35)` } : undefined}
     >
       <button className={styles.header} onClick={onToggle}>
         <div className={styles.headerLeft}>
@@ -138,10 +121,7 @@ export default function ChallengeCard({ assignment, teamCode, isActive, onToggle
             <div className={styles.title}>{challenge.title}</div>
           </div>
         </div>
-        <div
-          className={`${styles.chevronWrap} ${isActive ? styles.chevronUp : ''}`}
-          style={{ borderColor: theme.border, color: theme.color }}
-        >›</div>
+        <div className={`${styles.chevronWrap} ${isActive ? styles.chevronUp : ''}`} style={{ borderColor: theme.border, color: theme.color }}>›</div>
       </button>
 
       {isActive && (
@@ -165,8 +145,7 @@ export default function ChallengeCard({ assignment, teamCode, isActive, onToggle
                     className={styles.linkBtn}
                     style={{ background: theme.bg, borderColor: theme.border, color: theme.color }}
                   >
-                    <span>{l.buttonText}</span>
-                    <span className={styles.extIcon}>↗</span>
+                    <span>{l.buttonText}</span><span className={styles.extIcon}>↗</span>
                   </a>
                 ))}
               </div>

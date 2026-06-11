@@ -8,7 +8,7 @@ import styles from './TeamDashboard.module.css'
 
 type Link = { id: string; url: string; buttonText: string; order: number }
 type ChallengeData = {
-  id: string; title: string; question: string; imageData: string | null
+  id: string; title: string; question: string
   isFinal: boolean; icon: string; answerLength: number; links: Link[]
 }
 type Assignment = {
@@ -25,6 +25,20 @@ export default function TeamDashboard({ teamCode }: { teamCode: string }) {
   const [state, setState] = useState<TeamState | null>(null)
   const [loading, setLoading] = useState(true)
   const [activePosition, setActivePosition] = useState<number | null>(null)
+  const [images, setImages] = useState<Record<string, string>>({})
+
+  const fetchImages = useCallback((challenges: Assignment[]) => {
+    challenges.forEach((a) => {
+      fetch(`/api/team/${teamCode}/image/${a.challenge.id}`)
+        .then((r) => r.ok ? r.json() : null)
+        .then((d) => {
+          if (d?.imageData) {
+            setImages((prev) => ({ ...prev, [a.challenge.id]: d.imageData }))
+          }
+        })
+        .catch(() => {})
+    })
+  }, [teamCode])
 
   const fetchState = useCallback(async () => {
     const res = await fetch(`/api/team/${teamCode}`)
@@ -34,35 +48,29 @@ export default function TeamDashboard({ teamCode }: { teamCode: string }) {
       if (!data.gameState.isPublished) return
       const firstActive = data.challenges.find((a) => a.isUnlocked && !a.isCompleted)
       if (firstActive) setActivePosition(firstActive.position)
+      // Kick off image prefetch in background immediately after data loads
+      fetchImages(data.challenges)
     }
     setLoading(false)
-  }, [teamCode])
+  }, [teamCode, fetchImages])
 
-  // Optimistic update — no round trip needed after a correct answer
   const handleSolved = useCallback((assignmentId: string, points: number, nextUnlocked: boolean) => {
     setState((prev) => {
       if (!prev) return prev
       const now = new Date().toISOString()
+      const solvedPos = prev.challenges.find((x) => x.id === assignmentId)?.position ?? -1
       const challenges = prev.challenges.map((a) => {
-        if (a.id === assignmentId) {
-          return { ...a, isCompleted: true, completedAt: now, pointsEarned: points }
-        }
-        // find next by position
-        const solvedPos = prev.challenges.find((x) => x.id === assignmentId)?.position ?? -1
-        if (nextUnlocked && a.position === solvedPos + 1) {
-          return { ...a, isUnlocked: true }
-        }
+        if (a.id === assignmentId) return { ...a, isCompleted: true, completedAt: now, pointsEarned: points }
+        if (nextUnlocked && a.position === solvedPos + 1) return { ...a, isUnlocked: true }
         return a
       })
-      const newTotal = prev.team.totalPoints + points
       const allDone = challenges.every((a) => a.isCompleted)
       return {
         ...prev,
-        team: { ...prev.team, totalPoints: newTotal, finishedAt: allDone ? now : prev.team.finishedAt },
+        team: { ...prev.team, totalPoints: prev.team.totalPoints + points, finishedAt: allDone ? now : prev.team.finishedAt },
         challenges,
       }
     })
-    // Move to next challenge immediately
     if (nextUnlocked) {
       setState((prev) => {
         if (!prev) return prev
@@ -76,7 +84,6 @@ export default function TeamDashboard({ teamCode }: { teamCode: string }) {
 
   useEffect(() => {
     let ignore = false
-
     fetchState()
 
     const ably = new Ably.Realtime({
@@ -90,7 +97,6 @@ export default function TeamDashboard({ teamCode }: { teamCode: string }) {
 
     gameChannel.subscribe('game:published', () => { if (!ignore) fetchState() })
     gameChannel.subscribe('game:reset', () => { if (!ignore) fetchState() })
-    // Ably event is backup sync only — optimistic update already handled by handleSolved
     teamChannel.subscribe('challenge:completed', () => { if (!ignore) fetchState() })
 
     return () => {
@@ -139,7 +145,6 @@ export default function TeamDashboard({ teamCode }: { teamCode: string }) {
   const completed = state.challenges.filter((c) => c.isCompleted).length
   const total = state.challenges.length
   const allDone = completed === total
-
   const THEME_COLORS = ['#f59e0b','#8b5cf6','#06b6d4','#ec4899','#10b981']
   const activeChallenge = state.challenges.find((a) => a.isUnlocked && !a.isCompleted)
   const accentColor = THEME_COLORS[((activeChallenge?.position ?? 1) - 1) % THEME_COLORS.length]
@@ -156,10 +161,7 @@ export default function TeamDashboard({ teamCode }: { teamCode: string }) {
           </div>
         </div>
         <div className={styles.headerRight}>
-          <div className={styles.pointsBadge} style={{
-            background: `${accentColor}18`,
-            borderColor: `${accentColor}44`,
-          }}>
+          <div className={styles.pointsBadge} style={{ background: `${accentColor}18`, borderColor: `${accentColor}44` }}>
             <span className={styles.pointsIcon}>⭐</span>
             <span className={styles.pointsValue} style={{ color: accentColor }}>{state.team.totalPoints}</span>
             <span className={styles.pointsLabel} style={{ color: accentColor }}>pts</span>
@@ -188,11 +190,8 @@ export default function TeamDashboard({ teamCode }: { teamCode: string }) {
             assignment={assignment}
             teamCode={teamCode}
             isActive={activePosition === assignment.position}
-            onToggle={() =>
-              setActivePosition((p) =>
-                p === assignment.position ? null : assignment.position
-              )
-            }
+            imageData={images[assignment.challenge.id] ?? null}
+            onToggle={() => setActivePosition((p) => p === assignment.position ? null : assignment.position)}
             onSolved={(result) => handleSolved(assignment.id, result.points, result.nextUnlocked)}
           />
         ))}
