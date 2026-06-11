@@ -20,7 +20,6 @@ export default function JoinForm() {
     const trimmed = code.trim()
     if (!trimmed) return
 
-    // Secret admin trigger — no visible link
     if (trimmed.toLowerCase() === 'admin') {
       setCode('')
       setError('')
@@ -28,20 +27,9 @@ export default function JoinForm() {
       return
     }
 
+    // Navigate directly — TeamDashboard shows "not found" if code is wrong
     setLoading(true)
-    setError('')
-    try {
-      const res = await fetch(`/api/team/${encodeURIComponent(trimmed)}`)
-      if (!res.ok) {
-        setError('Team code not found. Double-check and try again.')
-        return
-      }
-      router.push(`/play/${trimmed}`)
-    } catch {
-      setError('Connection error. Please try again.')
-    } finally {
-      setLoading(false)
-    }
+    router.push(`/play/${encodeURIComponent(trimmed)}`)
   }
 
   async function handleAdminLogin(e: React.FormEvent) {
@@ -66,7 +54,6 @@ export default function JoinForm() {
       <AnimatedBackground />
 
       <main className={styles.main}>
-        {/* Logo */}
         <div className={styles.logo}>
           <div className={styles.logoIconWrap}>
             <span className={styles.logoIcon}>🔍</span>
@@ -76,7 +63,6 @@ export default function JoinForm() {
           <p className={styles.tagline}>SEP It Up : Clues, Chaos & Competition</p>
         </div>
 
-        {/* Card */}
         <div className={styles.card}>
           {mode === 'join' ? (
             <>

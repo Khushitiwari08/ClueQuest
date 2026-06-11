@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import OtpInput from '@/components/ui/OtpInput'
 import styles from './ChallengeCard.module.css'
 
@@ -14,7 +14,7 @@ const THEMES = [
 
 type Link = { id: string; url: string; buttonText: string; order: number }
 type ChallengeData = {
-  id: string; title: string; question: string; imageData: string | null
+  id: string; title: string; question: string
   isFinal: boolean; icon: string; answerLength: number; links: Link[]
 }
 type Assignment = {
@@ -34,12 +34,24 @@ export default function ChallengeCard({ assignment, teamCode, isActive, onToggle
   const [status, setStatus] = useState<Status>('idle')
   const [points, setPoints] = useState<number | null>(null)
   const [rank, setRank] = useState<number | null>(null)
+  const [imageData, setImageData] = useState<string | null>(null)
+  const [imageFetched, setImageFetched] = useState(false)
 
   const { challenge, isUnlocked, isCompleted, pointsEarned, position } = assignment
   const theme = THEMES[(position - 1) % THEMES.length]
   const icon = challenge.icon || '🔍'
   const answerLength = challenge.answerLength || 4
   const filled = boxes.filter(Boolean).length === answerLength
+
+  // Lazy-load image only when card is first expanded
+  useEffect(() => {
+    if (!isActive || imageFetched) return
+    setImageFetched(true)
+    fetch(`/api/team/${teamCode}/image/${challenge.id}`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => { if (d?.imageData) setImageData(d.imageData) })
+      .catch(() => {})
+  }, [isActive, imageFetched, teamCode, challenge.id])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -83,10 +95,7 @@ export default function ChallengeCard({ assignment, teamCode, isActive, onToggle
   // Completed
   if (isCompleted) {
     return (
-      <div
-        className={styles.completedCard}
-        style={{ borderColor: theme.border, background: theme.bg }}
-      >
+      <div className={styles.completedCard} style={{ borderColor: theme.border, background: theme.bg }}>
         <div className={styles.completedRow}>
           <div className={styles.completedLeft}>
             <div className={styles.completedIconWrap} style={{ background: theme.bg, borderColor: theme.border }}>
@@ -101,9 +110,7 @@ export default function ChallengeCard({ assignment, teamCode, isActive, onToggle
               <div className={styles.completedTitle}>{challenge.title}</div>
             </div>
           </div>
-          <div className={styles.completedPts} style={{ color: theme.color }}>
-            +{pointsEarned} pts
-          </div>
+          <div className={styles.completedPts} style={{ color: theme.color }}>+{pointsEarned} pts</div>
         </div>
       </div>
     )
@@ -120,10 +127,7 @@ export default function ChallengeCard({ assignment, teamCode, isActive, onToggle
     >
       <button className={styles.header} onClick={onToggle}>
         <div className={styles.headerLeft}>
-          <div
-            className={styles.iconBadge}
-            style={{ background: theme.bg, borderColor: theme.border, color: theme.color }}
-          >
+          <div className={styles.iconBadge} style={{ background: theme.bg, borderColor: theme.border, color: theme.color }}>
             <span className={styles.iconEmoji}>{icon}</span>
             {challenge.isFinal && <span className={styles.star}>⭐</span>}
           </div>
@@ -137,19 +141,16 @@ export default function ChallengeCard({ assignment, teamCode, isActive, onToggle
         <div
           className={`${styles.chevronWrap} ${isActive ? styles.chevronUp : ''}`}
           style={{ borderColor: theme.border, color: theme.color }}
-        >
-          ›
-        </div>
+        >›</div>
       </button>
 
       {isActive && (
         <div className={styles.body} style={{ borderTopColor: theme.border }}>
-
           <div className={styles.accentBar} style={{ background: `linear-gradient(90deg, ${theme.color}, transparent)` }} />
 
-          {challenge.imageData && (
+          {imageData && (
             <div className={styles.imageWrap} style={{ borderColor: theme.border }}>
-              <img src={challenge.imageData} alt="Challenge clue" className={styles.image} />
+              <img src={imageData} alt="Challenge clue" className={styles.image} />
             </div>
           )}
 
@@ -160,11 +161,7 @@ export default function ChallengeCard({ assignment, teamCode, isActive, onToggle
               <span className={styles.linksLabel} style={{ color: theme.color }}>Clue Resources</span>
               <div className={styles.linkList}>
                 {challenge.links.map((l) => (
-                  <a
-                    key={l.id}
-                    href={l.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  <a key={l.id} href={l.url} target="_blank" rel="noopener noreferrer"
                     className={styles.linkBtn}
                     style={{ background: theme.bg, borderColor: theme.border, color: theme.color }}
                   >
@@ -179,9 +176,7 @@ export default function ChallengeCard({ assignment, teamCode, isActive, onToggle
           <form onSubmit={handleSubmit} className={styles.form}>
             <div className={styles.answerLabel}>
               <span>Your Answer</span>
-              <span className={styles.charHint} style={{ color: theme.color }}>
-                {answerLength} characters
-              </span>
+              <span className={styles.charHint} style={{ color: theme.color }}>{answerLength} characters</span>
             </div>
 
             <OtpInput
@@ -193,9 +188,7 @@ export default function ChallengeCard({ assignment, teamCode, isActive, onToggle
               autoFocus={isActive}
             />
 
-            {status === 'wrong' && (
-              <p className={styles.wrongMsg}>✗ Not quite — try again!</p>
-            )}
+            {status === 'wrong' && <p className={styles.wrongMsg}>✗ Not quite — try again!</p>}
             {status === 'correct' && (
               <div className={styles.correctMsg}>
                 🎉 Correct!
@@ -217,12 +210,7 @@ export default function ChallengeCard({ assignment, teamCode, isActive, onToggle
                 boxShadow: `0 4px 16px ${theme.glow}`,
               } : undefined}
             >
-              {submitting
-                ? <span className={styles.spinner} />
-                : status === 'correct'
-                  ? '✓ Solved!'
-                  : 'Submit Answer'
-              }
+              {submitting ? <span className={styles.spinner} /> : status === 'correct' ? '✓ Solved!' : 'Submit Answer'}
             </button>
           </form>
         </div>

@@ -7,7 +7,6 @@ export async function GET(
 ) {
   const { code } = await params
 
-  // Fetch team, gameState, and assignments in parallel
   const [team, gameState] = await Promise.all([
     prisma.team.findFirst({
       where: { code: { equals: code, mode: 'insensitive' } },
@@ -21,7 +20,16 @@ export async function GET(
     where: { teamId: team.id },
     include: {
       challenge: {
-        include: { links: { orderBy: { order: 'asc' } } },
+        select: {
+          id: true,
+          title: true,
+          question: true,
+          isFinal: true,
+          icon: true,
+          answer: true,
+          // imageData intentionally excluded — fetched lazily per challenge
+          links: { orderBy: { order: 'asc' } },
+        },
       },
     },
     orderBy: { position: 'asc' },
@@ -49,7 +57,6 @@ export async function GET(
         id: a.challenge.id,
         title: a.challenge.title,
         question: a.challenge.question,
-        imageData: a.challenge.imageData,
         isFinal: a.challenge.isFinal,
         icon: a.challenge.icon,
         answerLength: a.challenge.answer.replace(/\s/g, '').length,
